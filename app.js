@@ -5,8 +5,8 @@ const BOTTOM_PAD = 60;      // місце під полем для тексту 
 let rows = 3, cols = 4;     // дефолтна сітка
 
 // Нові дефолти (темніший "малахіт", світло-золотий офф)
-const DEFAULT_ON  = '#10b981'; // emerald-ish (темніший за бірюзу)
-const DEFAULT_OFF = '#fff4cc'; // світло-золотий
+const DEFAULT_ON  = '#10b981'; // emerald-ish
+const DEFAULT_OFF = '#fff4cc'; // light-gold
 
 const COLORS = {
   on:  DEFAULT_ON,
@@ -16,7 +16,7 @@ const COLORS = {
 };
 
 const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext?.('2d');
 
 const shuffleInfo = document.getElementById('shuffleInfo');
 const stepsInfo   = document.getElementById('stepsInfo');
@@ -47,13 +47,12 @@ let hintIndex = 0;        // вказівник на наступний крок
 
 // ------------ Утиліти ------------
 function resizeCanvas() {
+  if (!canvas) return;
   canvas.width  = cols * CELL;
   canvas.height = rows * CELL + BOTTOM_PAD;
 }
 
-function cellIndex(r, c) {
-  return r * cols + c + 1;
-}
+function cellIndex(r, c) { return r * cols + c + 1; }
 
 function indexToRC(idx1) {
   const z = idx1 - 1;
@@ -106,10 +105,8 @@ function getSavedColors() {
 }
 function loadSavedColorsToInputs() {
   const { on, off } = getSavedColors();
-  if (on)  inputColorOn.value  = on;
-  else     inputColorOn.value  = DEFAULT_ON;
-  if (off) inputColorOff.value = off;
-  else     inputColorOff.value = DEFAULT_OFF;
+  if (inputColorOn)  inputColorOn.value  = on  || DEFAULT_ON;
+  if (inputColorOff) inputColorOff.value = off || DEFAULT_OFF;
 }
 function isRandomEveryGame() {
   return localStorage.getItem('randomEveryGame') === '1';
@@ -134,8 +131,8 @@ function isDarkColor(hex) {
 function applyTheme(on, off, persist=false) {
   COLORS.on  = on;
   COLORS.off = off;
-  inputColorOn.value  = on;
-  inputColorOff.value = off;
+  if (inputColorOn)  inputColorOn.value  = on;
+  if (inputColorOff) inputColorOff.value = off;
   if (persist) saveColors();
   draw();
 }
@@ -144,8 +141,8 @@ function resetColorsToDefault() {
 }
 function randomPastelOrVivid() {
   const h = Math.floor(Math.random() * 360);
-  const s = Math.floor(60 + Math.random()*30); // 60..90
-  const l = Math.floor(45 + Math.random()*15); // 45..60
+  const s = Math.floor(60 + Math.random()*30);
+  const l = Math.floor(45 + Math.random()*15);
   function hslToRgb(h, s, l){
     s/=100; l/=100;
     const k = n => (n + h/30) % 12;
@@ -164,7 +161,6 @@ function generateRandomTheme() {
   const onRgb = hexToRgb(on), offRgb = hexToRgb(off);
   const dist = Math.sqrt((onRgb.r-offRgb.r)**2 + (onRgb.g-offRgb.g)**2 + (onRgb.b-offRgb.b)**2);
   if (dist < 120) off = isDarkColor(on) ? '#ffffff' : '#111111';
-  // Не зберігаємо у localStorage, щоб не затирати користувацькі налаштування
   applyTheme(on, off, false);
 }
 
@@ -181,23 +177,26 @@ function generateSolvablePosition() {
   }
   solutionHint = [...shuffleHistory].reverse();
   hintIndex = 0;
-  shuffleInfo.textContent = `Заплутано за ${numMoves} кроків`;
+  if (shuffleInfo) shuffleInfo.textContent = `Заплутано за ${numMoves} кроків`;
   renderHints();
 }
 
 function renderHints() {
   const remaining = solutionHint.slice(hintIndex);
-  if (remaining.length > 7) {
-    hintLine1.textContent = remaining.slice(0, 7).join(' > ');
-    hintLine2.textContent = remaining.slice(7).join(' > ');
-  } else {
-    hintLine1.textContent = remaining.join(' > ');
-    hintLine2.textContent = '';
+  if (hintLine1 && hintLine2) {
+    if (remaining.length > 7) {
+      hintLine1.textContent = remaining.slice(0, 7).join(' > ');
+      hintLine2.textContent = remaining.slice(7).join(' > ');
+    } else {
+      hintLine1.textContent = remaining.join(' > ');
+      hintLine2.textContent = '';
+    }
   }
 }
 
 // ------------ Рендер ------------
 function drawOutlinedText(text, x, y) {
+  if (!ctx) return;
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -210,6 +209,7 @@ function drawOutlinedText(text, x, y) {
 }
 
 function draw() {
+  if (!ctx || !canvas) return;
   ctx.fillStyle = '#dcdcdc';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -241,17 +241,20 @@ function draw() {
 }
 
 function updatePanel() {
-  stepsInfo.textContent = `Кроки: ${stepCount}`;
+  if (stepsInfo) stepsInfo.textContent = `Кроки: ${stepCount}`;
   const sec = gameWon ? winTime : Math.floor((performance.now() - startTime) / 1000);
-  timeInfo.textContent = `Час: ${sec} с`;
+  if (timeInfo) timeInfo.textContent = `Час: ${sec} с`;
   draw();
 }
 
 // ------------ Взаємодія: Pointer Events ------------
-canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.style.touchAction = 'manipulation';
+if (canvas) {
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.style.touchAction = 'manipulation';
+}
 
 function canvasPosToCell(clientX, clientY) {
+  if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
   const x = clientX - rect.left;
   const y = clientY - rect.top;
@@ -279,34 +282,38 @@ function handleTapEvent(e) {
   updatePanel();
 }
 
-canvas.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'mouse' && e.button !== 0) return;
-  e.preventDefault();
-  handleTapEvent(e);
-});
+if (canvas) {
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    handleTapEvent(e);
+  });
+}
 
 // ------------ Кнопки у тулбарі ------------
-toolbar.addEventListener('pointerdown', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  e.preventDefault();
+if (toolbar) {
+  toolbar.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    e.preventDefault();
 
-  if (btn.id === 'btnRestart') {
-    newGame(rows, cols);
-    return;
-  }
-  if (btn.id === 'btnHint') {
-    performHintStep();
-    return;
-  }
-  if (btn.classList.contains('btnGrid')) {
-    const r = parseInt(btn.dataset.rows, 10);
-    const c = parseInt(btn.dataset.cols, 10);
-    newGame(r, c);
-    updateActiveGridButtons(r, c);
-    return;
-  }
-});
+    if (btn.id === 'btnRestart') {
+      newGame(rows, cols);
+      return;
+    }
+    if (btn.id === 'btnHint') {
+      performHintStep();
+      return;
+    }
+    if (btn.classList.contains('btnGrid')) {
+      const r = parseInt(btn.dataset.rows, 10);
+      const c = parseInt(btn.dataset.cols, 10);
+      newGame(r, c);
+      updateActiveGridButtons(r, c);
+      return;
+    }
+  });
+}
 
 function performHintStep() {
   if (gameWon) return;
@@ -354,11 +361,9 @@ window.addEventListener('keydown', (e) => {
 function newGame(r, c) {
   rows = r; cols = c;
   resizeCanvas();
-  // застосовуємо тему згідно прапорця
   if (isRandomEveryGame()) {
     generateRandomTheme();
   } else {
-    // дефолтна тема на старті кожної гри
     applyTheme(DEFAULT_ON, DEFAULT_OFF, false);
   }
   generateSolvablePosition();
@@ -369,16 +374,17 @@ function newGame(r, c) {
   updatePanel();
 }
 
-// Ініціалізація UI елементів:
-loadSavedColorsToInputs();                 // завантажити збережені у пікери (але не застосовувати автоматично)
-chkRandomTheme.checked = isRandomEveryGame();
-chkRandomTheme.addEventListener('change', (e) => {
-  setRandomEveryGame(e.target.checked);
-  // Перезапустити зі змінами
-  newGame(rows, cols);
-});
+// Ініціалізація UI елементів (null-safe)
+loadSavedColorsToInputs();
 
-// живі обробники пікерів — змінюють тему і зберігають користувацькі значення
+if (chkRandomTheme) {
+  chkRandomTheme.checked = isRandomEveryGame();
+  chkRandomTheme.addEventListener('change', (e) => {
+    setRandomEveryGame(e.target.checked);
+    newGame(rows, cols);
+  });
+}
+
 if (inputColorOn) {
   inputColorOn.addEventListener('input', (e) => {
     COLORS.on = e.target.value;

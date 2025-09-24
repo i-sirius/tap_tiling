@@ -1,5 +1,5 @@
 
-const CACHE = "svitlotycyalka-v5";
+const CACHE = "svitlotycyalka-v7";
 const ASSETS = [
   "./",
   "./index.html",
