@@ -4,9 +4,13 @@ const CELL = 100;           // px
 const BOTTOM_PAD = 60;      // місце під полем для тексту всередині канваса
 let rows = 3, cols = 4;     // дефолтна сітка
 
+// Нові дефолти (темніший "малахіт", світло-золотий офф)
+const DEFAULT_ON  = '#10b981'; // emerald-ish (темніший за бірюзу)
+const DEFAULT_OFF = '#fff4cc'; // світло-золотий
+
 const COLORS = {
-  on:  '#40e0d0', // змінюється пікером / темою
-  off: '#ffffff', // змінюється пікером / темою
+  on:  DEFAULT_ON,
+  off: DEFAULT_OFF,
   grid:'#000000',
   text:'#000000'
 };
@@ -28,8 +32,9 @@ const inputColorOn   = document.getElementById('colorOn');
 const inputColorOff  = document.getElementById('colorOff');
 const btnColorsReset = document.getElementById('btnColorsReset');
 const btnRandomTheme = document.getElementById('btnRandomTheme');
+const chkRandomTheme = document.getElementById('chkRandomTheme');
 
-let grid = [];           // true = бірюзова, false = біла
+let grid = [];           // true = ON, false = OFF
 let stepCount = 0;
 let startTime = 0;
 let timerId = null;
@@ -37,7 +42,7 @@ let gameWon = false;
 let winTime = 0;
 
 let shuffleHistory = [];  // історія натискань під час заплутування
-let solutionHint = [];    // обернений список (підказка до розв'язання)
+let solutionHint = [];    // обернений список (підказка)
 let hintIndex = 0;        // вказівник на наступний крок підказки
 
 // ------------ Утиліти ------------
@@ -47,12 +52,10 @@ function resizeCanvas() {
 }
 
 function cellIndex(r, c) {
-  // нумерація клітинок: 1..(rows*cols), рядок за рядком
   return r * cols + c + 1;
 }
 
 function indexToRC(idx1) {
-  // з номера 1..N до (r, c)
   const z = idx1 - 1;
   return { r: Math.floor(z / cols), c: z % cols };
 }
@@ -89,31 +92,33 @@ function stopTimer() {
   }
 }
 
-function randInt(a, b) { // включно [a, b]
-  return Math.floor(Math.random() * (b - a + 1)) + a;
-}
+function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
 
-// ---- Колірні утиліти + збереження ----
+// ---- Збереження кольорів/прапорця ----
 function saveColors() {
   localStorage.setItem('colorOn',  COLORS.on);
   localStorage.setItem('colorOff', COLORS.off);
 }
-function loadColors() {
+function getSavedColors() {
   const on  = localStorage.getItem('colorOn');
   const off = localStorage.getItem('colorOff');
-  if (on)  COLORS.on  = on;
-  if (off) COLORS.off = off;
-  if (inputColorOn)  inputColorOn.value  = COLORS.on;
-  if (inputColorOff) inputColorOff.value = COLORS.off;
+  return { on, off };
 }
-function resetColorsToDefault() {
-  COLORS.on  = '#40e0d0';
-  COLORS.off = '#ffffff';
-  saveColors();
-  if (inputColorOn)  inputColorOn.value  = COLORS.on;
-  if (inputColorOff) inputColorOff.value = COLORS.off;
-  draw();
+function loadSavedColorsToInputs() {
+  const { on, off } = getSavedColors();
+  if (on)  inputColorOn.value  = on;
+  else     inputColorOn.value  = DEFAULT_ON;
+  if (off) inputColorOff.value = off;
+  else     inputColorOff.value = DEFAULT_OFF;
 }
+function isRandomEveryGame() {
+  return localStorage.getItem('randomEveryGame') === '1';
+}
+function setRandomEveryGame(val) {
+  localStorage.setItem('randomEveryGame', val ? '1' : '0');
+}
+
+// ---- Контраст тексту ----
 function hexToRgb(hex) {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!m) return {r:0,g:0,b:0};
@@ -124,12 +129,23 @@ function isDarkColor(hex) {
   const yiq = (r*299 + g*587 + b*114) / 1000;
   return yiq < 128;
 }
+
+// ---- Теми ----
+function applyTheme(on, off, persist=false) {
+  COLORS.on  = on;
+  COLORS.off = off;
+  inputColorOn.value  = on;
+  inputColorOff.value = off;
+  if (persist) saveColors();
+  draw();
+}
+function resetColorsToDefault() {
+  applyTheme(DEFAULT_ON, DEFAULT_OFF, true);
+}
 function randomPastelOrVivid() {
-  // згенеруємо яскравий, але не токсичний колір (HSL → HEX спрощено)
   const h = Math.floor(Math.random() * 360);
-  const s = Math.floor(60 + Math.random()*30); // 60..90%
-  const l = Math.floor(45 + Math.random()*15); // 45..60%
-  // конвертнемо у hex
+  const s = Math.floor(60 + Math.random()*30); // 60..90
+  const l = Math.floor(45 + Math.random()*15); // 45..60
   function hslToRgb(h, s, l){
     s/=100; l/=100;
     const k = n => (n + h/30) % 12;
@@ -142,32 +158,19 @@ function randomPastelOrVivid() {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 function generateRandomTheme() {
-  // Підбираємо "on" довільно, "off" робимо світлим або темним для контрасту
   const on = randomPastelOrVivid();
   let off = '#ffffff';
-  // якщо on занадто світлий, зробимо off темним
-  if (!isDarkColor(on)) {
-    off = '#111111';
-  }
-  // але якщо off занадто схожий — примусово ставимо чорний/білий
+  if (!isDarkColor(on)) off = '#111111';
   const onRgb = hexToRgb(on), offRgb = hexToRgb(off);
   const dist = Math.sqrt((onRgb.r-offRgb.r)**2 + (onRgb.g-offRgb.g)**2 + (onRgb.b-offRgb.b)**2);
   if (dist < 120) off = isDarkColor(on) ? '#ffffff' : '#111111';
-
-  COLORS.on = on;
-  COLORS.off = off;
-  saveColors();
-  if (inputColorOn)  inputColorOn.value  = COLORS.on;
-  if (inputColorOff) inputColorOff.value = COLORS.off;
-  draw();
+  // Не зберігаємо у localStorage, щоб не затирати користувацькі налаштування
+  applyTheme(on, off, false);
 }
 
 // ------------ Генерація розв’язної позиції ------------
 function generateSolvablePosition() {
-  // 1) всі клітинки ON
   grid = Array.from({length: rows}, () => Array.from({length: cols}, () => true));
-
-  // 2) випадкове "заплутування"
   const numMoves = randInt(5, 14);
   shuffleHistory = [];
   for (let i = 0; i < numMoves; i++) {
@@ -176,18 +179,13 @@ function generateSolvablePosition() {
     toggleNeighbors(r, c);
     shuffleHistory.push(cellIndex(r, c));
   }
-
-  // 3) Підказка — це обернений порядок заплутування
   solutionHint = [...shuffleHistory].reverse();
-  hintIndex = 0; // скидаємо лічильник підказок
-
-  // Оновити панель
+  hintIndex = 0;
   shuffleInfo.textContent = `Заплутано за ${numMoves} кроків`;
   renderHints();
 }
 
 function renderHints() {
-  // залишок підказок, починаючи з поточного кроку
   const remaining = solutionHint.slice(hintIndex);
   if (remaining.length > 7) {
     hintLine1.textContent = remaining.slice(0, 7).join(' > ');
@@ -212,35 +210,29 @@ function drawOutlinedText(text, x, y) {
 }
 
 function draw() {
-  // фон поля
   ctx.fillStyle = '#dcdcdc';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // клітинки
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = '16px Verdana';
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // фон клітинки
       const bg = grid[r][c] ? COLORS.on : COLORS.off;
       ctx.fillStyle = bg;
       ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
 
-      // рамка
       ctx.strokeStyle = COLORS.grid;
       ctx.lineWidth = 2;
       ctx.strokeRect(c * CELL, r * CELL, CELL, CELL);
 
-      // номер клітинки з контрастним до фону кольором
       ctx.fillStyle = isDarkColor(bg) ? '#ffffff' : '#000000';
       const num = cellIndex(r, c);
       ctx.fillText(String(num), c * CELL + CELL / 2, r * CELL + CELL / 2);
     }
   }
 
-  // повідомлення про перемогу під полем (по центру відносно поля)
   if (gameWon) {
     const msg = `Перемога! Час: ${winTime} с`;
     ctx.font = '20px Verdana';
@@ -249,12 +241,9 @@ function draw() {
 }
 
 function updatePanel() {
-  // кроки
   stepsInfo.textContent = `Кроки: ${stepCount}`;
-  // час
   const sec = gameWon ? winTime : Math.floor((performance.now() - startTime) / 1000);
   timeInfo.textContent = `Час: ${sec} с`;
-
   draw();
 }
 
@@ -266,7 +255,7 @@ function canvasPosToCell(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const x = clientX - rect.left;
   const y = clientY - rect.top;
-  if (y > rows * CELL) return null; // ігноруємо кліки під полем
+  if (y > rows * CELL) return null;
   const c = Math.floor(x / CELL);
   const r = Math.floor(y / CELL);
   if (r < 0 || r >= rows || c < 0 || c >= cols) return null;
@@ -286,18 +275,17 @@ function handleTapEvent(e) {
     winTime = Math.floor((performance.now() - startTime) / 1000);
     stopTimer();
   }
-  renderHints(); // при ручних кліках підказка показує залишок оригінальної послідовності
+  renderHints();
   updatePanel();
 }
 
 canvas.addEventListener('pointerdown', (e) => {
-  // лише первинна кнопка (ліва миша) або дотик
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  e.preventDefault(); // блокує синтетичний click після touch
+  e.preventDefault();
   handleTapEvent(e);
 });
 
-// ------------ Кнопки у тулбарі (Pointer Events) ------------
+// ------------ Кнопки у тулбарі ------------
 toolbar.addEventListener('pointerdown', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
@@ -307,12 +295,10 @@ toolbar.addEventListener('pointerdown', (e) => {
     newGame(rows, cols);
     return;
   }
-
   if (btn.id === 'btnHint') {
     performHintStep();
     return;
   }
-
   if (btn.classList.contains('btnGrid')) {
     const r = parseInt(btn.dataset.rows, 10);
     const c = parseInt(btn.dataset.cols, 10);
@@ -324,14 +310,14 @@ toolbar.addEventListener('pointerdown', (e) => {
 
 function performHintStep() {
   if (gameWon) return;
-  if (hintIndex >= solutionHint.length) return; // підказки закінчились
+  if (hintIndex >= solutionHint.length) return;
 
-  const nextIdx = solutionHint[hintIndex]; // номер клітинки (1..N)
+  const nextIdx = solutionHint[hintIndex];
   const { r, c } = indexToRC(nextIdx);
 
   toggleNeighbors(r, c);
   stepCount++;
-  hintIndex++;         // переходимо до наступного кроку підказки
+  hintIndex++;
   renderHints();
 
   if (allSameColor()) {
@@ -349,7 +335,7 @@ function updateActiveGridButtons(r, c) {
   if (active) active.classList.add('active');
 }
 
-// ------------ Клавіші (залишаємо теж) ------------
+// ------------ Клавіші ------------
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') {
     newGame(rows, cols);
@@ -368,6 +354,13 @@ window.addEventListener('keydown', (e) => {
 function newGame(r, c) {
   rows = r; cols = c;
   resizeCanvas();
+  // застосовуємо тему згідно прапорця
+  if (isRandomEveryGame()) {
+    generateRandomTheme();
+  } else {
+    // дефолтна тема на старті кожної гри
+    applyTheme(DEFAULT_ON, DEFAULT_OFF, false);
+  }
   generateSolvablePosition();
   stepCount = 0;
   gameWon = false;
@@ -376,8 +369,16 @@ function newGame(r, c) {
   updatePanel();
 }
 
-// ініціалізація кольорів + обробники пікерів/кнопок тем
-loadColors();
+// Ініціалізація UI елементів:
+loadSavedColorsToInputs();                 // завантажити збережені у пікери (але не застосовувати автоматично)
+chkRandomTheme.checked = isRandomEveryGame();
+chkRandomTheme.addEventListener('change', (e) => {
+  setRandomEveryGame(e.target.checked);
+  // Перезапустити зі змінами
+  newGame(rows, cols);
+});
+
+// живі обробники пікерів — змінюють тему і зберігають користувацькі значення
 if (inputColorOn) {
   inputColorOn.addEventListener('input', (e) => {
     COLORS.on = e.target.value;

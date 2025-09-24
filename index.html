@@ -5,7 +5,7 @@
   <meta charset="utf-8" />
   <title>Світлотицялка (HTML+JS)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#40e0d0">
+  <meta name="theme-color" content="#10b981">
 
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.webmanifest">
@@ -37,12 +37,17 @@
       <div class="hint-line" id="hintLine2"></div>
 
       <hr style="margin:16px 0;">
-      <div class="row small">Колір «увімк.»: <input type="color" id="colorOn" value="#40e0d0"></div>
-      <div class="row small">Колір «вимк.»: <input type="color" id="colorOff" value="#ffffff"></div>
+      <div class="row small">Колір «увімк.»: <input type="color" id="colorOn" value="#10b981"></div>
+      <div class="row small">Колір «вимк.»: <input type="color" id="colorOff" value="#fff4cc"></div>
       <div class="row palette-row">
         <button type="button" id="btnColorsReset" class="panel-btn small">Скинути кольори</button>
         <button type="button" id="btnRandomTheme" class="panel-btn small">🎨 Випадкова тема</button>
       </div>
+
+      <label class="row small" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="chkRandomTheme">
+        Випадковий в кожній грі
+      </label>
 
       <hr style="margin:16px 0;">
       <div class="help small">
