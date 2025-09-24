@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Світлотицялка (HTML+JS)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --cell: 100px;
+      --panel-w: 260px;
+      --field-gap-bottom: 60px; /* місце під полем для тексту */
+      --bg: #c8c8c8;
+      --panel-bg: #e6e6e6;
+      --grid: #000;
+      --on: #40e0d0;   /* бірюзовий */
+      --off: #ffffff;  /* білий */
+      --text: #000;
+      --win: #008000;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Verdana, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { display: flex; max-width: calc( (var(--cell) * 6) + var(--panel-w) + 40px ); margin: 20px auto; gap: 16px; align-items: flex-start; }
+    .stage { position: relative; }
+    canvas { display: block; background: #ddd; border: 1px solid #000; }
+    .panel {
+      width: var(--panel-w);
+      background: var(--panel-bg);
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      padding: 12px 12px 16px;
+      position: sticky;
+      top: 12px;
+    }
+    .panel h3 { margin: 0 0 10px; font-size: 18px; }
+    .row { margin: 10px 0; font-size: 18px; }
+    .hint-title { margin-top: 18px; font-size: 16px; }
+    .hint-line { font-size: 14px; word-break: break-word; }
+    .footer {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      text-shadow:
+        0 0 3px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="stage">
+      <canvas id="game" width="400" height="360" aria-label="Світлотицялка"></canvas>
+    </div>
+    <aside class="panel">
+      <h3>Панель</h3>
+      <div class="row" id="shuffleInfo">Заплутано за 0 кроків</div>
+      <div class="row" id="stepsInfo">Кроки: 0</div>
+      <div class="row" id="timeInfo">Час: 0 с</div>
+
+      <div class="hint-title">Підказка:</div>
+      <div class="hint-line" id="hintLine1"></div>
+      <div class="hint-line" id="hintLine2"></div>
+
+      <hr style="margin:16px 0;">
+      <div style="font-size:14px; line-height:1.35; opacity:.85">
+        Клавіші: <b>R</b> — рестарт, <b>1</b> — 3×4, <b>2</b> — 4×4, <b>3</b> — 5×5.
+      </div>
+    </aside>
+  </div>
+
+  <div class="footer" id="restartFooter">Для повторної гри натисніть R</div>
+
+  <script>
+    // ------ Константи/стан ------
+    const CELL = 100; // px
+    const BOTTOM_PAD = 60; // місце під полем у канвасі (для текстів)
+    let rows = 3, cols = 4;
+
+    const COLORS = {
+      on:  '#40e0d0',
+      off: '#ffffff',
+      grid:'#000000',
+      winBg: '#008000',
+      text: '#000000'
+    };
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const shuffleInfo = document.getElementById('shuffleInfo');
+    const stepsInfo   = document.getElementById('stepsInfo');
+    const timeInfo    = document.getElementById('timeInfo');
+    const hintLine1   = document.getElementById('hintLine1');
+    const hintLine2   = document.getElementById('hintLine2');
+    const restartFooter= document.getElementById('restartFooter');
+
+    let grid = [];              // true = бірюзовий, false = білий
+    let stepCount = 0;
+    let startTime = 0;
+    let timerId = null;
+    let gameWon = false;
+    let winTime = 0;
+
+    let shuffleHistory = [];    // історія натискань під час заплутування
+    let solutionHint = [];      // обернений список (підказка)
+
+    // ------ Утиліти ------
+    function resizeCanvas() {
+      canvas.width  = cols * CELL;
+      canvas.height = rows * CELL + BOTTOM_PAD;
+    }
+
+    function cellIndex(r, c) {
+      return r * cols + c + 1; // нумерація з 1
+    }
+
+    function toggleNeighbors(r, c) {
+      const dirs = [[0,0],[0,1],[0,-1],[1,0],[-1,0]];
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+          grid[nr][nc] = !grid[nr][nc];
+        }
+      }
+    }
+
+    function allSameColor() {
+      const first = grid[0][0];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c] !== first) return false;
+        }
+      }
+      return true;
+    }
+
+    function startTimer() {
+      stopTimer();
+      startTime = performance.now();
+      timerId = setInterval(updatePanel, 200);
+    }
+
+    function stopTimer() {
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    }
+
+    // ------ Генерація розв’язної позиції ------
+    function generateSolvablePosition() {
+      // 1) всі клітинки ON
+      grid = Array.from({length: rows}, () => Array.from({length: cols}, () => true));
+
+      // 2) випадкове заплутування
+      const numMoves = randInt(5, 14);
+      shuffleHistory = [];
+      for (let i = 0; i < numMoves; i++) {
+        const r = randInt(0, rows - 1);
+        const c = randInt(0, cols - 1);
+        toggleNeighbors(r, c);
+        shuffleHistory.push(cellIndex(r, c));
+      }
+      // 3) підказка — це обернений порядок заплутування
+      solutionHint = [...shuffleHistory].reverse();
+
+      // оновити праву панель
+      shuffleInfo.textContent = `Заплутано за ${numMoves} кроків`;
+      renderHints();
+    }
+
+    function randInt(a, b) {
+      // включно [a, b]
+      return Math.floor(Math.random() * (b - a + 1)) + a;
+    }
+
+    function renderHints() {
+      // 1 рядок максимум 7 елементів
+      if (solutionHint.length > 7) {
+        hintLine1.textContent = solutionHint.slice(0, 7).join(' > ');
+        hintLine2.textContent = solutionHint.slice(7).join(' > ');
+      } else {
+        hintLine1.textContent = solutionHint.join(' > ');
+        hintLine2.textContent = '';
+      }
+    }
+
+    // ------ Рендер ------
+    function draw() {
+      // фон поля
+      ctx.fillStyle = '#dcdcdc';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // клітинки
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '16px Verdana';
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          ctx.fillStyle = grid[r][c] ? COLORS.on : COLORS.off;
+          ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+
+          // рамка
+          ctx.strokeStyle = COLORS.grid;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(c * CELL, r * CELL, CELL, CELL);
+
+          // номер клітинки
+          ctx.fillStyle = COLORS.text;
+          const num = cellIndex(r, c);
+          ctx.fillText(String(num), c * CELL + CELL / 2, r * CELL + CELL / 2);
+        }
+      }
+
+      // якщо виграли — показати повідомлення під полем (центр по полю)
+      if (gameWon) {
+        const msg = `Перемога! Час: ${winTime} с`;
+        ctx.font = '20px Verdana';
+        drawOutlinedText(msg, (cols * CELL) / 2, rows * CELL + 20);
+      }
+
+      // підказка внизу сторінки — поза канвасом (в footer)
+      // (вже є в DOM, тому тут нічого робити не треба)
+    }
+
+    function drawOutlinedText(text, x, y) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.strokeText(text, x, y);
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    }
+
+    function updatePanel() {
+      // кроки / час
+      stepsInfo.textContent = `Кроки: ${stepCount}`;
+      const sec = gameWon ? winTime : Math.floor((performance.now() - startTime) / 1000);
+      if (!gameWon) {
+        timeInfo.textContent = `Час: ${sec} с`;
+      } else {
+        timeInfo.textContent = `Час: ${winTime} с`;
+      }
+      draw();
+    }
+
+    // ------ Взаємодія ------
+    function canvasPosToCell(mx, my) {
+      const rect = canvas.getBoundingClientRect();
+      const x = mx - rect.left, y = my - rect.top;
+      if (y > rows * CELL) return null; // клік під полем ігноруємо
+      const c = Math.floor(x / CELL);
+      const r = Math.floor(y / CELL);
+      if (r < 0 || r >= rows || c < 0 || c >= cols) return null;
+      return { r, c };
+    }
+
+    canvas.addEventListener('click', (e) => {
+      if (gameWon) return;
+      const cell = canvasPosToCell(e.clientX, e.clientY);
+      if (!cell) return;
+      toggleNeighbors(cell.r, cell.c);
+      stepCount++;
+      if (allSameColor()) {
+        gameWon = true;
+        winTime = Math.floor((performance.now() - startTime) / 1000);
+        stopTimer();
+        updatePanel();
+      } else {
+        updatePanel();
+      }
+    });
+
+    // торкання для мобільних
+    canvas.addEventListener('touchstart', (e) => {
+      if (gameWon) return;
+      const t = e.changedTouches[0];
+      const cell = canvasPosToCell(t.clientX, t.clientY);
+      if (!cell) return;
+      toggleNeighbors(cell.r, cell.c);
+      stepCount++;
+      if (allSameColor()) {
+        gameWon = true;
+        winTime = Math.floor((performance.now() - startTime) / 1000);
+        stopTimer();
+      }
+      updatePanel();
+    }, {passive: true});
+
+    // клавіші
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'r' || e.key === 'R') {
+        newGame(rows, cols);
+      } else if (e.key === '1') {
+        newGame(3, 4);
+      } else if (e.key === '2') {
+        newGame(4, 4);
+      } else if (e.key === '3') {
+        newGame(5, 5);
+      }
+    });
+
+    // ------ Життєвий цикл ------
+    function newGame(r, c) {
+      rows = r; cols = c;
+      resizeCanvas();
+      generateSolvablePosition();
+      stepCount = 0;
+      gameWon = false;
+      winTime = 0;
+      startTimer();
+      updatePanel();
+    }
+
+    // старт
+    newGame(rows, cols);
+  </script>
+</body>
+</html>
