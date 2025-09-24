@@ -1,105 +1,21 @@
+
 <!doctype html>
 <html lang="uk">
 <head>
   <meta charset="utf-8" />
   <title>Світлотицялка (HTML+JS)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#40e0d0">
 
-  <style>
-    :root {
-      --cell: 100px;       /* розмір клітинки */
-      --panel-w: 260px;    /* ширина правої панелі */
-      --field-gap-bottom: 60px; /* місце під полем для тексту */
-      --bg: #c8c8c8;
-      --panel-bg: #e6e6e6;
-      --grid: #000;
-      --on: #085850;   /* бірюзовий */
-      --off: #ffffff;  /* білий */
-      --text: #000;
-      --btn-bg: #f3f3f3;
-      --btn-border: #bbb;
-      --btn-active: #176d64;
-    }
-    * { box-sizing: border-box; }
-    html, body, .wrap, .panel, canvas, .toolbar, .toolbar button {
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-    }
-    body {
-      margin: 0;
-      font-family: Verdana, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-    .wrap {
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-      max-width: calc( (var(--cell) * 6) + var(--panel-w) + 40px );
-      margin: 20px auto;
-      padding: 0 12px;
-    }
-    .stage { position: relative; width: fit-content; }
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin: 0 0 8px;
-      align-items: center;
-    }
-    .toolbar button {
-      appearance: none;
-      border: 1px solid var(--btn-border);
-      background: var(--btn-bg);
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      min-width: 80px;
-      box-shadow: 0 1px 0 rgba(0,0,0,.06);
-    }
-    .toolbar button:active { transform: translateY(1px); }
-    .toolbar button.active {
-      border-color: #2aaea0;
-      background: #e7fbf8;
-      outline: 2px solid var(--btn-active);
-    }
-
-    canvas { display: block; background: #ddd; border: 1px solid #000; }
-
-    .panel {
-      width: var(--panel-w);
-      background: var(--panel-bg);
-      border: 1px solid #aaa;
-      border-radius: 8px;
-      padding: 12px 12px 16px;
-      position: sticky;
-      top: 12px;
-    }
-    .panel h3 { margin: 0 0 10px; font-size: 18px; }
-    .row { margin: 10px 0; font-size: 18px; }
-    .hint-title { margin-top: 18px; font-size: 16px; }
-    .hint-line { font-size: 14px; word-break: break-word; opacity: .95; }
-
-    .footer {
-      text-align: center;
-      margin-top: 8px;
-      font-size: 18px;
-      font-weight: 600;
-      color: #fff;
-      text-shadow:
-        0 0 3px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body>
   <div class="wrap">
     <div class="stage">
-      <!-- Екранні кнопки зверху -->
       <div class="toolbar" id="toolbar">
         <button type="button" id="btnRestart" title="Рестарт (R)">⟲ Рестарт</button>
         <button type="button" class="btnGrid" data-rows="3" data-cols="4" title="3×4 (клавіша 1)">3×4</button>
@@ -107,8 +23,6 @@
         <button type="button" class="btnGrid" data-rows="5" data-cols="5" title="5×5 (клавіша 3)">5×5</button>
         <button type="button" id="btnHint" title="Виконати наступний крок підказки">💡 Підказка: хід</button>
       </div>
-
-      <!-- ширина/висота канваса оновлюються скриптом при зміні rows/cols -->
       <canvas id="game" width="400" height="360" aria-label="Світлотицялка"></canvas>
     </div>
 
@@ -123,21 +37,23 @@
       <div class="hint-line" id="hintLine2"></div>
 
       <hr style="margin:16px 0;">
-      <div style="font-size:14px; line-height:1.35; opacity:.85">
-        Клавіші: <b>R</b> — рестарт, <b>1</b> — 3×4, <b>2</b> — 4×4, <b>3</b> — 5×5. <br/>
-        Або користуйтесь кнопками зверху поля.
+      <div class="row small">Колір «увімк.»: <input type="color" id="colorOn" value="#40e0d0"></div>
+      <div class="row small">Колір «вимк.»: <input type="color" id="colorOff" value="#ffffff"></div>
+      <div class="row palette-row">
+        <button type="button" id="btnColorsReset" class="panel-btn small">Скинути кольори</button>
+        <button type="button" id="btnRandomTheme" class="panel-btn small">🎨 Випадкова тема</button>
+      </div>
+
+      <hr style="margin:16px 0;">
+      <div class="help small">
+        Клавіші: <b>R</b> — рестарт, <b>1</b> — 3×4, <b>2</b> — 4×4, <b>3</b> — 5×5, <b>H</b> — підказка.
       </div>
     </aside>
   </div>
 
   <div class="footer" id="restartFooter">Для повторної гри натисніть R</div>
 
-  <!-- ... десь вище: канвас, панель, кнопки ... -->
-
-  <!-- підключаємо логіку гри -->
   <script src="app.js"></script>
-
-  <!-- реєструємо service worker (для PWA/офлайну) -->
   <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {

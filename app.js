@@ -1,11 +1,12 @@
+
 // ------------ Константи/стан ------------
 const CELL = 100;           // px
 const BOTTOM_PAD = 60;      // місце під полем для тексту всередині канваса
 let rows = 3, cols = 4;     // дефолтна сітка
 
 const COLORS = {
-  on:  '#40e0d0',
-  off: '#ffffff',
+  on:  '#40e0d0', // змінюється пікером / темою
+  off: '#ffffff', // змінюється пікером / темою
   grid:'#000000',
   text:'#000000'
 };
@@ -22,6 +23,11 @@ const hintLine2   = document.getElementById('hintLine2');
 const toolbar     = document.getElementById('toolbar');
 const btnRestart  = document.getElementById('btnRestart');
 const btnHint     = document.getElementById('btnHint');
+
+const inputColorOn   = document.getElementById('colorOn');
+const inputColorOff  = document.getElementById('colorOff');
+const btnColorsReset = document.getElementById('btnColorsReset');
+const btnRandomTheme = document.getElementById('btnRandomTheme');
 
 let grid = [];           // true = бірюзова, false = біла
 let stepCount = 0;
@@ -87,6 +93,75 @@ function randInt(a, b) { // включно [a, b]
   return Math.floor(Math.random() * (b - a + 1)) + a;
 }
 
+// ---- Колірні утиліти + збереження ----
+function saveColors() {
+  localStorage.setItem('colorOn',  COLORS.on);
+  localStorage.setItem('colorOff', COLORS.off);
+}
+function loadColors() {
+  const on  = localStorage.getItem('colorOn');
+  const off = localStorage.getItem('colorOff');
+  if (on)  COLORS.on  = on;
+  if (off) COLORS.off = off;
+  if (inputColorOn)  inputColorOn.value  = COLORS.on;
+  if (inputColorOff) inputColorOff.value = COLORS.off;
+}
+function resetColorsToDefault() {
+  COLORS.on  = '#40e0d0';
+  COLORS.off = '#ffffff';
+  saveColors();
+  if (inputColorOn)  inputColorOn.value  = COLORS.on;
+  if (inputColorOff) inputColorOff.value = COLORS.off;
+  draw();
+}
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return {r:0,g:0,b:0};
+  return { r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) };
+}
+function isDarkColor(hex) {
+  const {r,g,b} = hexToRgb(hex);
+  const yiq = (r*299 + g*587 + b*114) / 1000;
+  return yiq < 128;
+}
+function randomPastelOrVivid() {
+  // згенеруємо яскравий, але не токсичний колір (HSL → HEX спрощено)
+  const h = Math.floor(Math.random() * 360);
+  const s = Math.floor(60 + Math.random()*30); // 60..90%
+  const l = Math.floor(45 + Math.random()*15); // 45..60%
+  // конвертнемо у hex
+  function hslToRgb(h, s, l){
+    s/=100; l/=100;
+    const k = n => (n + h/30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n),1)));
+    return [Math.round(255*f(0)), Math.round(255*f(8)), Math.round(255*f(4))];
+  }
+  const [r,g,b] = hslToRgb(h,s,l);
+  const toHex = v => v.toString(16).padStart(2,'0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+function generateRandomTheme() {
+  // Підбираємо "on" довільно, "off" робимо світлим або темним для контрасту
+  const on = randomPastelOrVivid();
+  let off = '#ffffff';
+  // якщо on занадто світлий, зробимо off темним
+  if (!isDarkColor(on)) {
+    off = '#111111';
+  }
+  // але якщо off занадто схожий — примусово ставимо чорний/білий
+  const onRgb = hexToRgb(on), offRgb = hexToRgb(off);
+  const dist = Math.sqrt((onRgb.r-offRgb.r)**2 + (onRgb.g-offRgb.g)**2 + (onRgb.b-offRgb.b)**2);
+  if (dist < 120) off = isDarkColor(on) ? '#ffffff' : '#111111';
+
+  COLORS.on = on;
+  COLORS.off = off;
+  saveColors();
+  if (inputColorOn)  inputColorOn.value  = COLORS.on;
+  if (inputColorOff) inputColorOff.value = COLORS.off;
+  draw();
+}
+
 // ------------ Генерація розв’язної позиції ------------
 function generateSolvablePosition() {
   // 1) всі клітинки ON
@@ -148,7 +223,9 @@ function draw() {
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      ctx.fillStyle = grid[r][c] ? COLORS.on : COLORS.off;
+      // фон клітинки
+      const bg = grid[r][c] ? COLORS.on : COLORS.off;
+      ctx.fillStyle = bg;
       ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
 
       // рамка
@@ -156,8 +233,8 @@ function draw() {
       ctx.lineWidth = 2;
       ctx.strokeRect(c * CELL, r * CELL, CELL, CELL);
 
-      // номер клітинки
-      ctx.fillStyle = COLORS.text;
+      // номер клітинки з контрастним до фону кольором
+      ctx.fillStyle = isDarkColor(bg) ? '#ffffff' : '#000000';
       const num = cellIndex(r, c);
       ctx.fillText(String(num), c * CELL + CELL / 2, r * CELL + CELL / 2);
     }
@@ -241,6 +318,7 @@ toolbar.addEventListener('pointerdown', (e) => {
     const c = parseInt(btn.dataset.cols, 10);
     newGame(r, c);
     updateActiveGridButtons(r, c);
+    return;
   }
 });
 
@@ -296,6 +374,35 @@ function newGame(r, c) {
   winTime = 0;
   startTimer();
   updatePanel();
+}
+
+// ініціалізація кольорів + обробники пікерів/кнопок тем
+loadColors();
+if (inputColorOn) {
+  inputColorOn.addEventListener('input', (e) => {
+    COLORS.on = e.target.value;
+    saveColors();
+    draw();
+  });
+}
+if (inputColorOff) {
+  inputColorOff.addEventListener('input', (e) => {
+    COLORS.off = e.target.value;
+    saveColors();
+    draw();
+  });
+}
+if (btnColorsReset) {
+  btnColorsReset.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    resetColorsToDefault();
+  });
+}
+if (btnRandomTheme) {
+  btnRandomTheme.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    generateRandomTheme();
+  });
 }
 
 // старт
