@@ -6,7 +6,6 @@ let rows = 3, cols = 4;
 
 const DEFAULT_ON  = '#40e0d0'; // бірюзовий
 const DEFAULT_OFF = '#ffffff'; // білий
-
 const COLORS = { on: DEFAULT_ON, off: DEFAULT_OFF, grid:'#000' };
 
 const canvas = document.getElementById('game');
@@ -19,8 +18,6 @@ const hintLine1   = document.getElementById('hintLine1');
 const hintLine2   = document.getElementById('hintLine2');
 
 const toolbar     = document.getElementById('toolbar');
-const btnRestart  = document.getElementById('btnRestart');
-const btnHint     = document.getElementById('btnHint');
 
 const inputColorOn   = document.getElementById('colorOn');
 const inputColorOff  = document.getElementById('colorOff');
@@ -45,6 +42,7 @@ function resizeCanvas() {
 }
 function cellIndex(r, c) { return r * cols + c + 1; }
 function indexToRC(idx1) { const z = idx1 - 1; return { r: Math.floor(z/cols), c: z % cols }; }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
 
 function toggleNeighbors(r, c) {
   const dirs = [[0,0],[0,1],[0,-1],[1,0],[-1,0]];
@@ -61,11 +59,11 @@ function allSameColor() {
   return true;
 }
 
+// ------------ Таймер ------------
 function startTimer(){ stopTimer(); startTime = performance.now(); timerId = setInterval(updatePanel, 200); }
 function stopTimer(){ if (timerId) { clearInterval(timerId); timerId = null; } }
-function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
 
-// ---- Збереження кольорів ----
+// ------------ Збереження кольорів ------------
 function saveColors(){ localStorage.setItem('colorOn', COLORS.on); localStorage.setItem('colorOff', COLORS.off); }
 function loadColors(){
   const on = localStorage.getItem('colorOn'); const off = localStorage.getItem('colorOff');
@@ -74,11 +72,11 @@ function loadColors(){
   if (inputColorOff) inputColorOff.value = COLORS.off;
 }
 
-// ---- Контраст тексту ----
+// ------------ Контраст для цифр ------------
 function hexToRgb(hex){ const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex); if(!m) return {r:0,g:0,b:0}; return {r:parseInt(m[1],16),g:parseInt(m[2],16),b:parseInt(m[3],16)}; }
 function isDarkColor(hex){ const {r,g,b}=hexToRgb(hex); const yiq=(r*299+g*587+b*114)/1000; return yiq<128; }
 
-// ---- Теми ----
+// ------------ Теми ------------
 function applyTheme(on, off, persist=false){
   COLORS.on=on; COLORS.off=off;
   if (inputColorOn) inputColorOn.value=on;
@@ -101,10 +99,10 @@ function generateRandomTheme(){
   const a=hexToRgb(on), b=hexToRgb(off);
   const dist=Math.hypot(a.r-b.r,a.g-b.g,a.b-b.b);
   if (dist<120) off=isDarkColor(on)?'#ffffff':'#111111';
-  applyTheme(on, off, false); // не перетираємо збережені користувацькі
+  applyTheme(on, off, false);
 }
 
-// ------------ Генерація розв’язної позиції ------------
+// ------------ Генерація позиції ------------
 function generateSolvablePosition(){
   grid=Array.from({length:rows},()=>Array.from({length:cols},()=>true));
   const numMoves=randInt(5,14);
@@ -119,7 +117,6 @@ function generateSolvablePosition(){
   shuffleInfo.textContent=`Заплутано за ${numMoves} кроків`;
   renderHints();
 }
-
 function renderHints(){
   const remaining=solutionHint.slice(hintIndex);
   if (remaining.length>7){
@@ -139,7 +136,6 @@ function drawOutlinedText(text, x, y){
   ctx.strokeText(text,x,y); ctx.fillText(text,x,y);
   ctx.restore();
 }
-
 function draw(){
   ctx.fillStyle='#dcdcdc'; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='16px Verdana';
@@ -162,6 +158,7 @@ function draw(){
   }
 }
 
+// ------------ Панель ------------
 function updatePanel(){
   stepsInfo.textContent=`Кроки: ${stepCount}`;
   const sec = gameWon ? winTime : Math.floor((performance.now()-startTime)/1000);
@@ -181,7 +178,6 @@ function canvasPosToCell(clientX, clientY){
   if (r<0||r>=rows||c<0||c>=cols) return null;
   return {r,c};
 }
-
 function handleTap(e){
   if (gameWon) return;
   const cell=canvasPosToCell(e.clientX,e.clientY); if(!cell) return;
@@ -191,7 +187,6 @@ function handleTap(e){
   renderHints();
   updatePanel();
 }
-
 canvas.addEventListener('pointerdown', e=>{
   if (e.pointerType==='mouse' && e.button!==0) return;
   e.preventDefault(); handleTap(e);
@@ -207,7 +202,6 @@ toolbar.addEventListener('pointerdown', e=>{
     newGame(r,c); updateActiveGridButtons(r,c); return;
   }
 });
-
 function performHintStep(){
   if (gameWon) return;
   if (hintIndex>=solutionHint.length) return;
@@ -216,7 +210,6 @@ function performHintStep(){
   if (allSameColor()){ gameWon=true; winTime=Math.floor((performance.now()-startTime)/1000); stopTimer(); }
   updatePanel();
 }
-
 function updateActiveGridButtons(r,c){
   document.querySelectorAll('.btnGrid').forEach(b=>b.classList.remove('active'));
   const active=document.querySelector(`.btnGrid[data-rows="${r}"][data-cols="${c}"]`);
@@ -230,6 +223,15 @@ window.addEventListener('keydown', (e)=>{
   else if (e.key==='2'){ newGame(4,4); updateActiveGridButtons(4,4); }
   else if (e.key==='3'){ newGame(5,5); updateActiveGridButtons(5,5); }
   else if (e.key==='h'||e.key==='H'){ performHintStep(); }
+});
+
+// ------------ iOS Install hint ------------
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+}
+window.addEventListener('load', () => {
+  const el = document.getElementById('iosInstallHint');
+  if (el && !isStandalone()) el.hidden = false;
 });
 
 // ------------ Старт гри ------------

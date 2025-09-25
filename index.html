@@ -3,12 +3,23 @@
 <html lang="uk">
 <head>
   <meta charset="utf-8" />
-  <title>Світлотицялка</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Tap Tiling</title>
+
+  <!-- iOS / fullscreen / safe area -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tap Tiling">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- PWA -->
   <meta name="theme-color" content="#40e0d0">
-  <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="wrap">
@@ -20,12 +31,13 @@
         <button type="button" class="btnGrid" data-rows="5" data-cols="5" title="5×5 (3)">5×5</button>
         <button type="button" id="btnHint" title="Виконати наступний крок підказки">💡 Підказка</button>
       </div>
-      <canvas id="game" width="400" height="360" aria-label="Світлотицялка"></canvas>
+
+      <canvas id="game" width="400" height="360" aria-label="Tap Tiling"></canvas>
       <div class="footer">Для повторної гри натисніть R</div>
     </div>
 
     <aside class="panel">
-      <h3>Панель</h3>
+      <h3>Налаштування</h3>
       <div class="row" id="shuffleInfo">Заплутано за 0 кроків</div>
       <div class="row" id="stepsInfo">Кроки: 0</div>
       <div class="row" id="timeInfo">Час: 0 с</div>
@@ -47,6 +59,11 @@
         Клавіші: <b>R</b> — рестарт, <b>1</b> — 3×4, <b>2</b> — 4×4, <b>3</b> — 5×5, <b>H</b> — підказка.
       </div>
     </aside>
+  </div>
+
+  <!-- iOS install hint (shows only in browser mode) -->
+  <div id="iosInstallHint" class="install-hint" hidden>
+    Додайте на Домашній екран: <b>Поділитися → Add to Home Screen</b>
   </div>
 
   <script src="app.js"></script>
